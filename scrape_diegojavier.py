@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import pandas as pd
 import logging
+import os
 logging.basicConfig(filename="scrap.log", level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 BASE_AUTHOR = "https://diegojavier.wordpress.com/author/diegojavier/"
@@ -142,11 +143,14 @@ def crawl_all_posts():
     return all_rows
 
 def save_csv(rows, path="contemplaciones_diejojavier_all.csv"):
+    # Asegura que el directorio 'salida' exista
+    os.makedirs("salida", exist_ok=True)
+    output_path = os.path.join("salida", "contemplaciones_diejojavier_all.csv")
     df = pd.DataFrame(rows, columns=[
         "title", "post_url", "blog_date", "ciclo", "liturgical_day", "gospel_reading", "other_readings"
     ])
-    df.to_csv(path, index=False)
-    print(f"[+] Guardado {len(df)} entradas en {path}")
+    df.to_csv(output_path, index=False)
+    print(f"[+] Guardado {len(df)} entradas en {output_path}")
 
 if __name__ == "__main__":
     print("Comenzando rastreo del autor...")
