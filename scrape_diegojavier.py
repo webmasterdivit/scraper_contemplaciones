@@ -57,7 +57,14 @@ def extract_from_post(url):
     title = title_tag.get_text(strip=True) if title_tag else soup.title.get_text(strip=True)
     # Fecha
     date_tag = soup.find('time')
-    blog_date = date_tag.get('datetime')[:10] if date_tag and date_tag.get('datetime') else (date_tag.get_text(strip=True) if date_tag else "")
+    blog_date = ""
+    if date_tag:
+        if date_tag.get('datetime'):
+            blog_date = date_tag.get('datetime')[:10]
+        else:
+            blog_date = date_tag.get_text(strip=True)
+    if not blog_date:
+        logging.warning(f"No se encontró fecha para {url}, se usará cadena vacía.")
     # Contenido (texto)
     article = soup.find('article') or soup.find('div', class_=re.compile(r"entry-content|post-content", re.I)) or soup
     content_text = article.get_text(separator="\n", strip=True)
@@ -124,7 +131,7 @@ def crawl_all_posts():
     found_posts = set()
     all_rows = []
     # Recorremos páginas de autor hasta límite o hasta que no haya nuevas entradas
-    max_entries = 3
+    # max_entries eliminado para procesar todas las entradas
     for page in range(1, PAGINATION_LIMIT+1):
         page_url = BASE_AUTHOR if page == 1 else f"{BASE_AUTHOR}page/{page}/"
         try:
@@ -142,16 +149,14 @@ def crawl_all_posts():
             break
         print(f"[+] Página {page}: {len(new_links)} nuevas entradas encontradas.")
         for link in new_links:
-            if len(all_rows) >= max_entries:
-                return all_rows
             try:
                 row = extract_from_post(link)
                 all_rows.append(row)
                 found_posts.add(link)
                 # Loguear la entrada procesada
                 logging.info(f"Entrada procesada: {row['title']} | URL: {row['post_url']} | Fecha: {row['blog_date']}")
-                # pequeña pausa para no saturar el sitio
-                time.sleep(0.8)
+                # Pausa de 10 segundos entre peticiones al mismo dominio
+                time.sleep(10)
             except Exception as e:
                 logging.error(f"Error procesando {link}: {e}")
                 print(f"[!] Error procesando {link}: {e}")
