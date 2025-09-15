@@ -12,7 +12,8 @@ COPY requirements.txt ./
 # Instala las dependencias necesarias
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Crea un volumen para acceder al CSV y scrap.log
+
+# Crea un volumen para acceder a los resultados (CSV y scrap.log)
 VOLUME ["/app/salida"]
 
 # Comando por defecto para ejecutar el script

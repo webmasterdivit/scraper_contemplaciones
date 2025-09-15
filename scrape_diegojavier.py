@@ -16,7 +16,8 @@ from urllib.parse import urljoin
 import pandas as pd
 import logging
 import os
-logging.basicConfig(filename="scrap.log", level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
+os.makedirs("salida", exist_ok=True)
+logging.basicConfig(filename="salida/scrap.log", level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 
 BASE_AUTHOR = "https://diegojavier.wordpress.com/author/diegojavier/"
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ContemplacionesScraper/1.0)"}
@@ -87,29 +88,43 @@ def extract_from_post(url):
         m = re.search(r"\bCiclo\s*([ABC])\b", content_text, re.I)
         if m:
             ciclo = m.group(1).upper()
+
+    # liturgical_date_aci: usar la fecha del blog en formato YYYY-MM-DD
+    liturgical_date_aci = blog_date
+
     # Extraer lecturas bíblicas (busca citas típicas como "Lc 10, 1-12; 17-20")
     citations = BIBLE_CITATION_RE.findall(content_text)
     # limpiemos y prioricemos lecturas evangélicas (Mt, Mc, Lc, Jn)
     gospel_candidates = [c.strip() for c in citations if re.search(r"\b(Lc|Lucas|Mateo|Mt|Marcos|Marcos|Juan|Jn)\b", c, re.I)]
-    gospel_reading = "; ".join(gospel_candidates) if gospel_candidates else (citations[0] if citations else "")
+    readings = "; ".join(citations)
 
-    # other_readings: juntamos las otras citas que no sean evangelio
-    other_readings = "; ".join([c.strip() for c in citations if c.strip() not in gospel_candidates])
+    # liturgical_readings: scrape de aciprensa
+    liturgical_readings = ""
+    if liturgical_date_aci:
+        aci_url = f"https://www.aciprensa.com/calendario/{liturgical_date_aci}"
+        try:
+            aci_soup = get_soup(aci_url)
+            ul = aci_soup.select_one("div.page-content > ul")
+            if ul:
+                liturgical_readings = ul.get_text(separator="\n", strip=True)
+        except Exception as e:
+            logging.error(f"Error obteniendo lecturas de ACI Prensa para {liturgical_date_aci}: {e}")
 
     return {
         "title": title,
         "post_url": url,
-        "blog_date": blog_date,
         "ciclo": ciclo,
         "liturgical_day": liturgical_day,
-        "gospel_reading": gospel_reading,
-        "other_readings": other_readings
+        "liturgical_date_aci": liturgical_date_aci,
+        "readings": readings,
+        "liturgical_readings": liturgical_readings
     }
 
 def crawl_all_posts():
     found_posts = set()
     all_rows = []
     # Recorremos páginas de autor hasta límite o hasta que no haya nuevas entradas
+    max_entries = 3
     for page in range(1, PAGINATION_LIMIT+1):
         page_url = BASE_AUTHOR if page == 1 else f"{BASE_AUTHOR}page/{page}/"
         try:
@@ -127,6 +142,8 @@ def crawl_all_posts():
             break
         print(f"[+] Página {page}: {len(new_links)} nuevas entradas encontradas.")
         for link in new_links:
+            if len(all_rows) >= max_entries:
+                return all_rows
             try:
                 row = extract_from_post(link)
                 all_rows.append(row)
@@ -147,7 +164,7 @@ def save_csv(rows, path="contemplaciones_diejojavier_all.csv"):
     os.makedirs("salida", exist_ok=True)
     output_path = os.path.join("salida", "contemplaciones_diejojavier_all.csv")
     df = pd.DataFrame(rows, columns=[
-        "title", "post_url", "blog_date", "ciclo", "liturgical_day", "gospel_reading", "other_readings"
+        "title", "post_url", "ciclo", "liturgical_day", "liturgical_date_aci", "readings", "liturgical_readings"
     ])
     df.to_csv(output_path, index=False)
     print(f"[+] Guardado {len(df)} entradas en {output_path}")
